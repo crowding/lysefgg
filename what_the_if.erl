@@ -8,8 +8,8 @@ heh_fine() ->
     if 1 =:= 2; 1 =:= 1 ->
             works
     end,
-    if 1 =:= 2, 1=:= 1 ->
-            works
+    if 1 =:= 2, 1 =:= 1 ->
+            fails
     end.
 
 oh_god(N) ->
