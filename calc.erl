@@ -12,6 +12,8 @@ rpn("/", [N1, N2 | S]) -> [N2/N1|S];
 rpn("^", [N1, N2 | S]) -> [math:pow(N2,N1)|S];
 rpn("ln", [N | S]) -> [math:log(N)|S];
 rpn("log10", [N | S]) -> [math:log10(N)|S];
+rpn("sum", S) -> [lists:sum(S)];
+rpn("prod", S) -> [lists:foldl(fun (A,B) -> A*B end, 1, S)];
 rpn(X, Stack) -> [read(X) | Stack].
 
 read(N) ->
@@ -36,6 +38,6 @@ rpn_test() ->
     true = math:log(2.7) == rpn("2.7 ln"),
     true = math:log10(2.7) == rpn("2.7 log10"),
     50 = rpn("10 10 10 20 sum"),
-    10.0 = rpn("10 10 10 20 got sum 5 /"),
+    10.0 = rpn("10 10 10 20 sum 5 /"),
     1000.0 = rpn("10 10 20 0.5 prod"),
     ok.
