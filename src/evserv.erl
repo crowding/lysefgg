@@ -19,7 +19,7 @@ init() ->
     %% Another option is to just pass the events straight to the server
     %% through this function.
     loop(#state{events=orddict:new()
-                , clients=orddict:nw()
+                , clients=orddict:new()
                }).
 
 loop(S = #state{}) ->
@@ -70,13 +70,24 @@ valid_time(H,M,S) when H >= 0, H < 24,
 valid_time(_,_,_) -> false.
 
 test() ->
-    CheckTrue = true,
-    CheckFalse = false,
-    CheckTrue = valid_datetime({{2012,12,31},{00,01,30}}),
-    CheckFalse = valid_datetime({{2012,12,32},{00,01,30}}),
-    CheckTrue = valid_time({23,59,59}),
-    CheckFalse = valid_time({23,59,60}),
+    case valid_datetime({{2012,12,31},{00,01,30}}) of true -> ok end,
+    case valid_datetime({{2012,12,32},{00,01,30}}) of false -> ok end,
+    case valid_time({23,59,59}) of true -> ok end,
+    case valid_time({23,59,60}) of false -> ok end,
+    Pid = spawn(?MODULE, init, []),
+    Ref = make_ref(),
+    Pid ! {self(), Ref, {add, "foo", "an event", event:from_now(1)}},
+    receive {Ref, ok} -> ok after 500 -> exit('timeout') end,
+    Pid ! {self(), Ref, {subscribe, self()}},
+    receive {Ref, ok} -> ok after 500 -> exit('timeout') end,
+    Pid ! shutdown,
+    flush(),
     ok.
-        
 
-    
+flush() ->
+    receive
+        Foo -> io:format("~p got ~p~n", [self(), Foo]),
+               flush()
+    after 0 ->
+            ok
+    end.

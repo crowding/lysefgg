@@ -3,11 +3,11 @@
 
 -record(state, {server, name="", to_go=0}).
 
-start(EventName, Delay) ->
-    spawn(?MODULE, init, [self(), EventName, Delay]).
+start(EventName, When) ->
+    spawn(?MODULE, init, [self(), EventName, When]).
 
-start_link(EventName, Delay) ->
-    spawn_link(?MODULE, init, [self(), EventName, Delay]).
+start_link(EventName, When) ->
+    spawn_link(?MODULE, init, [self(), EventName, When]).
 
 cancel(Pid) ->
     %%Monitor in case the process is already dead
@@ -72,7 +72,7 @@ from_now(Secs) ->
 
 flush() ->
     receive
-        Foo -> io:format("~p~n", [Foo]),
+        Foo -> io:format("~p got ~p~n", [self(), Foo]),
                flush()
     after 0 ->
             ok
