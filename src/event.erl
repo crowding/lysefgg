@@ -22,10 +22,10 @@ cancel(Pid) ->
     end.
 
 %% Event's innards
-init(Server, EventName, Delay) ->
+init(Server, EventName, DateTime) ->
     loop(#state{server=Server,
                 name=EventName,
-                to_go=normalize(Delay)}).
+                to_go=time_to_go(DateTime)}).
 
 loop(S = #state{server=Server, to_go=[T|Next]}) ->
     receive
@@ -54,16 +54,21 @@ time_to_go(TimeOut={{_,_,_}, {_,_,_}}) ->
     normalize(Secs).
 
 test() ->
-    start("test", 1)
+    start("test", from_now(1))
         , timer:sleep(500)
         , flush()
         , timer:sleep(500)
         , flush()
-        , Pid = start("test", 500)
+        , Pid = start("test", from_now(500))
         , cancel(Pid)
-        , Pid2 = start("test", 365*24*60*60)
+        , Pid2 = start("test", from_now(365*24*60*60))
         , cancel(Pid2)
         .
+
+from_now(Secs) ->
+    calendar:gregorian_seconds_to_datetime(
+      calendar:datetime_to_gregorian_seconds(calendar:local_time())
+      + Secs).
 
 flush() ->
     receive
