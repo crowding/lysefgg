@@ -38,7 +38,16 @@ loop(S = #state{}) ->
                                       S#state.events),
             Pid ! {MsgRef, ok},
             loop(S#state{events = NewEvents});
-        %% {Pid, MsgRef, {cancel, Name}} ->
+        {Pid, MsgRef, {cancel, Name}} ->
+            Events = case orddict:find(Name, S#state.events) of
+                         {ok, E} ->
+                             event:cancel(E#event.pid),
+                             orddict:erase(Name, S#state.events);
+                         error ->
+                             S#state.events
+                     end,
+            Pid ! {MsgRef, ok},
+            loop(S#state{events = Events});
         %% {done, Name} ->
         %%     ...
         shutdown ->
@@ -47,10 +56,9 @@ loop(S = #state{}) ->
         %%     ...
         %% code_change ->
         %%     ...
-        %% Unknown ->
-        %%     Io:format("Unknown message: ~pn", [Unknown]),
-        %%     loop(State)
-        _ -> nope
+        Unknown ->
+             io:format("Unknown message: ~p~n", [Unknown]),
+             loop(S)
     end.
 
 valid_datetime({Date, Time}) ->
@@ -77,9 +85,18 @@ test() ->
     Pid = spawn(?MODULE, init, []),
     Ref = make_ref(),
     Pid ! {self(), Ref, {add, "foo", "an event", event:from_now(1)}},
-    receive {Ref, ok} -> ok after 500 -> exit('timeout') end,
+    receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
     Pid ! {self(), Ref, {subscribe, self()}},
-    receive {Ref, ok} -> ok after 500 -> exit('timeout') end,
+    receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+
+    Pid ! {self(), Ref, {cancel, "foo"}},
+    receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+    %%after canceling, we should not receive a notification....
+    receive Unexpected ->
+            exit('received an unexpected message ~p', [Unexpected])
+    after 100 -> ok
+    end,
+
     Pid ! shutdown,
     flush(),
     ok.
