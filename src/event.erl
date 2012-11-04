@@ -12,7 +12,7 @@ start_link(EventName, Delay) ->
 cancel(Pid) ->
     %%Monitor in case the process is already dead
     Ref = erlang:monitor(process, Pid),
-    Pid = {self(), Ref, cancel},
+    Pid ! {self(), Ref, cancel},
     receive
         {Ref, ok} ->
             erlang:demonitor(Ref, [flush]),
@@ -60,13 +60,9 @@ test() ->
         , timer:sleep(500)
         , flush()
         , Pid = start("test", 500)
-        , ReplyRef = make_ref()
-        , Pid ! {self(), ReplyRef, cancel}
-        , flush()
+        , cancel(Pid)
         , Pid2 = start("test", 365*24*60*60)
-        , ReplyRef2 = make_ref()
-        , Pid2 ! {self(), ReplyRef2, cancel}
-        , flush()
+        , cancel(Pid2)
         .
 
 flush() ->
