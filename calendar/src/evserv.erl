@@ -24,6 +24,18 @@ start_link() ->
 terminate() ->
     ?MODULE ! shutdown.
 
+subscribe(Pid) ->
+    Ref = erlang:monitor(process, whereis(?MODULE)),
+    ?MODULE ! {self(), Ref, {subscribe, Pid}},
+    receive
+        {Ref, ok} ->
+            {ok, Ref};
+        {'DOWN', Ref, process, _Pid, Reason} ->
+            {error, Reason}
+    after 5000 ->
+            {error, timeout}
+    end.
+
 init() ->
     %% Loading events from a static file could be done here.
     %% You would need to pass an argument to init telling where the
@@ -113,12 +125,10 @@ test() ->
     Ref = make_ref(),
     try
         %%subscribe
-        Pid ! {self(), Ref, {subscribe, self()}},
-        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+        case subscribe(self()) of {ok, _} -> ok end,
 
         %%subscribe a second client
-        Pid ! {self(), Ref, {subscribe, Client}},
-        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+        case subscribe(Client) of {ok, _} -> ok end,
 
         %%create two events
         Pid ! {self(), Ref, {add, "foo", "an event", event:from_now(1)}},
@@ -157,7 +167,7 @@ test() ->
 
     after
         exit(Client, kill),
-        shutdown(),
+        terminate(),
         flush()
     end,
     ok.
