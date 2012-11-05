@@ -12,6 +12,18 @@
                }
        ).
 
+%this wouild be Erlang's equivalent of a singleton pattern...
+start() ->
+    register(?MODULE, Pid=spawn(?MODULE, init, [])),
+    Pid.
+
+start_link() ->
+    register(?MODULE, Pid=spawn_link(?MODULE, init, [])),
+    Pid.
+
+terminate() ->
+    ?MODULE ! shutdown.
+
 init() ->
     %% Loading events from a static file could be done here.
     %% You would need to pass an argument to init telling where the
@@ -26,7 +38,7 @@ loop(S = #state{}) ->
     receive
         {Pid, MsgRef, {subscribe, Client}} ->
             Ref = erlang:monitor(process, Client),
-            io:format("monitoring ~p~n", [Client]), %%%
+            %%%io:format("monitoring ~p~n", [Client]),
             NewClients = orddict:store(Ref, Client, S#state.clients),
             Pid ! {MsgRef, ok},
             loop(S#state{clients = NewClients});
@@ -63,7 +75,7 @@ loop(S = #state{}) ->
         shutdown ->
             exit(shutdown);
         {'DOWN', Ref, process, _Pid, _Reason} ->
-            io:format("removing monitor on ~p~n", [Ref]), %%%
+            %%%io:format("removing monitor on ~p~n", [Ref]),
             loop(S#state{clients=orddict:erase(Ref, S#state.clients)});
         code_change ->
             ?MODULE:loop(S);
@@ -96,7 +108,7 @@ test() ->
     case valid_datetime({{2012,12,32},{00,01,30}}) of false -> ok end,
     case valid_time({23,59,59}) of true -> ok end,
     case valid_time({23,59,60}) of false -> ok end,
-    Pid = spawn(?MODULE, init, []),
+    Pid = start(),
     Client = spawn(?MODULE, simpleClient, [self()]),
     Ref = make_ref(),
     try
@@ -129,7 +141,7 @@ test() ->
         %%(there's a printf in evserv...)
         receive
             {clientReceived, {done, "bar", "another event"}} ->
-                io:format("killing ~p~n", [Client]), %%%
+                %%%io:format("killing ~p~n", [Client]),
                 exit(Client, kill);
             Unexpected -> exit(io_lib:format('received an unexepcted message ~p',
                                              [Unexpected]))
@@ -144,8 +156,8 @@ test() ->
         end
 
     after
-        Pid ! shutdown,
         exit(Client, kill),
+        shutdown(),
         flush()
     end,
     ok.
