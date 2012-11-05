@@ -36,6 +36,16 @@ subscribe(Pid) ->
             {error, timeout}
     end.
 
+add_event(Name, Description, TimeOut) ->
+    Ref = make_ref(),
+    ?MODULE ! {self(), Ref, {add, Name, Description, TimeOut}},
+    receive
+        {Ref, Msg} -> Msg
+    after 5000 ->
+            {error, timeout}
+    end.
+
+
 init() ->
     %% Loading events from a static file could be done here.
     %% You would need to pass an argument to init telling where the
@@ -131,11 +141,8 @@ test() ->
         case subscribe(Client) of {ok, _} -> ok end,
 
         %%create two events
-        Pid ! {self(), Ref, {add, "foo", "an event", event:from_now(1)}},
-        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
-
-        Pid ! {self(), Ref, {add, "bar", "another event", event:from_now(1)}},
-        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+        case add_event("foo", "an event", event:from_now(1)) of ok -> ok end,
+        case add_event("bar", "another event", event:from_now(1)) of ok -> ok end,
 
         %%cancel one of them
         Pid ! {self(), Ref, {cancel, "foo"}},
