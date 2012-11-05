@@ -64,6 +64,14 @@ cancel(Name) ->
             {error, timeout}
     end.
 
+listen(Delay) ->
+    receive
+        M = {done, _Name, _Description} ->
+            [M | listen(0)]
+    after Delay*1000 ->
+            []
+    end.
+
 init() ->
     %% Loading events from a static file could be done here.
     %% You would need to pass an argument to init telling where the
