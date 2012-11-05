@@ -33,7 +33,7 @@ loop(S = #state{server=Server, to_go=[T|Next]}) ->
             Server ! {Ref, ok}
     after T*1000 ->
               if Next =:= [] ->
-                      Server ! {dont, S#state.name};
+                      Server ! {done, S#state.name};
                  Next =/= [] ->
                       loop(S#state{to_go=Next})
               end

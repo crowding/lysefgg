@@ -48,11 +48,18 @@ loop(S = #state{}) ->
                      end,
             Pid ! {MsgRef, ok},
             loop(S#state{events = Events});
-        %% {done, Name} ->
-        %%     ...
+        {done, Name} ->
+            case orddict:find(Name, S#state.events) of
+                {ok, E} ->
+                    send_to_clients({done, E#event.name, E#event.description}, S#state.clients);
+                error ->
+                    %% this may happen if we cancel an event and it
+                    %% fires at the same time
+                    loop(S)
+            end;
         shutdown ->
             exit(shutdown);
-        %% {'DOWN', Ref, process, _PID, _Reason} ->
+        %%{'DOWN', Ref, process, _PID, _Reason} ->
         %%     ...
         %% code_change ->
         %%     ...
@@ -60,6 +67,9 @@ loop(S = #state{}) ->
              io:format("Unknown message: ~p~n", [Unknown]),
              loop(S)
     end.
+
+send_to_clients(Msg, ClientDict) ->
+    orddict:map(fun(_Ref, Pid) -> Pid ! Msg end, ClientDict).
 
 valid_datetime({Date, Time}) ->
     try
@@ -84,21 +94,41 @@ test() ->
     case valid_time({23,59,60}) of false -> ok end,
     Pid = spawn(?MODULE, init, []),
     Ref = make_ref(),
-    Pid ! {self(), Ref, {add, "foo", "an event", event:from_now(1)}},
-    receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
-    Pid ! {self(), Ref, {subscribe, self()}},
-    receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+    try
+        %%subscribe
+        Pid ! {self(), Ref, {subscribe, self()}},
+        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
 
-    Pid ! {self(), Ref, {cancel, "foo"}},
-    receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+        %%create two events
+        Pid ! {self(), Ref, {add, "foo", "an event", event:from_now(1)}},
+        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+
+        Pid ! {self(), Ref, {add, "bar", "another event", event:from_now(1)}},
+        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+
+        %%cancel one of them
+        Pid ! {self(), Ref, {cancel, "foo"}},
+        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+
+        %%then we should receive from the remaining one
+        receive
+            {done, "bar", "another event"} -> ok;
+            Unexpected -> exit('received an unexepcted message ~p', Unexpected)
+        after 1500 -> exit('timeout')
+        end,
+
+        %%but not the other
+        receive Unexpected2 ->
+                exit('received an unexpected message ~p', [Unexpected2])
+        after 1500 -> ok
+        end
+    %we should receive a notification from the other
     %%after canceling, we should not receive a notification....
-    receive Unexpected ->
-            exit('received an unexpected message ~p', [Unexpected])
-    after 100 -> ok
-    end,
 
-    Pid ! shutdown,
-    flush(),
+    after
+        Pid ! shutdown,
+        flush()
+    end,
     ok.
 
 flush() ->
