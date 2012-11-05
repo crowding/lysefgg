@@ -45,6 +45,24 @@ add_event(Name, Description, TimeOut) ->
             {error, timeout}
     end.
 
+add_event2(Name, Description, TimeOut) ->
+    Ref = make_ref(),
+    ?MODULE ! {self(), Ref, {add, Name, Description, TimeOut}},
+    receive
+        {Ref, {error, Reason}} -> erlang:error(Reason);
+        {Ref, Msg} -> Msg
+    after 5000 ->
+            {error, timeout}
+    end.
+
+cancel(Name) ->
+    Ref = make_ref(),
+    ?MODULE ! {self(), Ref, {cancel, Name}},
+    receive
+        {Ref, ok} -> ok
+    after 5000 ->
+            {error, timeout}
+    end.
 
 init() ->
     %% Loading events from a static file could be done here.
@@ -130,9 +148,8 @@ test() ->
     case valid_datetime({{2012,12,32},{00,01,30}}) of false -> ok end,
     case valid_time({23,59,59}) of true -> ok end,
     case valid_time({23,59,60}) of false -> ok end,
-    Pid = start(),
+    start(),
     Client = spawn(?MODULE, simpleClient, [self()]),
-    Ref = make_ref(),
     try
         %%subscribe
         case subscribe(self()) of {ok, _} -> ok end,
@@ -145,8 +162,7 @@ test() ->
         case add_event("bar", "another event", event:from_now(1)) of ok -> ok end,
 
         %%cancel one of them
-        Pid ! {self(), Ref, {cancel, "foo"}},
-        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+        case cancel("foo") of ok -> ok end,
 
         %%then we should receive from the active message
         receive
@@ -155,7 +171,6 @@ test() ->
         end,
 
         %%as should the client, which we'll kill; it should be removed
-        %%(there's a printf in evserv...)
         receive
             {clientReceived, {done, "bar", "another event"}} ->
                 %%%io:format("killing ~p~n", [Client]),
@@ -171,7 +186,6 @@ test() ->
                                    [Unexpected2]))
         after 1500 -> ok
         end
-
     after
         exit(Client, kill),
         terminate(),
