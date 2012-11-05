@@ -26,6 +26,7 @@ loop(S = #state{}) ->
     receive
         {Pid, MsgRef, {subscribe, Client}} ->
             Ref = erlang:monitor(process, Client),
+            io:format("monitoring ~p~n", [Client]), %%%
             NewClients = orddict:store(Ref, Client, S#state.clients),
             Pid ! {MsgRef, ok},
             loop(S#state{clients = NewClients});
@@ -51,7 +52,9 @@ loop(S = #state{}) ->
         {done, Name} ->
             case orddict:find(Name, S#state.events) of
                 {ok, E} ->
-                    send_to_clients({done, E#event.name, E#event.description}, S#state.clients);
+                    send_to_clients({done, E#event.name, E#event.description}, S#state.clients),
+                    NewEvents = orddict:erase(Name, S#state.events),
+                    loop(S#state{events=NewEvents});
                 error ->
                     %% this may happen if we cancel an event and it
                     %% fires at the same time
@@ -59,13 +62,14 @@ loop(S = #state{}) ->
             end;
         shutdown ->
             exit(shutdown);
-        %%{'DOWN', Ref, process, _PID, _Reason} ->
-        %%     ...
-        %% code_change ->
-        %%     ...
+        {'DOWN', Ref, process, _Pid, _Reason} ->
+            io:format("removing monitor on ~p~n", [Ref]), %%%
+            loop(S#state{clients=orddict:erase(Ref, S#state.clients)});
+        code_change ->
+            ?MODULE:loop(S);
         Unknown ->
-             io:format("Unknown message: ~p~n", [Unknown]),
-             loop(S)
+            io:format("Unknown message: ~p~n", [Unknown]),
+            loop(S)
     end.
 
 send_to_clients(Msg, ClientDict) ->
@@ -93,10 +97,15 @@ test() ->
     case valid_time({23,59,59}) of true -> ok end,
     case valid_time({23,59,60}) of false -> ok end,
     Pid = spawn(?MODULE, init, []),
+    Client = spawn(?MODULE, simpleClient, [self()]),
     Ref = make_ref(),
     try
         %%subscribe
         Pid ! {self(), Ref, {subscribe, self()}},
+        receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
+
+        %%subscribe a second client
+        Pid ! {self(), Ref, {subscribe, Client}},
         receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
 
         %%create two events
@@ -110,24 +119,45 @@ test() ->
         Pid ! {self(), Ref, {cancel, "foo"}},
         receive {Ref, ok} -> ok after 100 -> exit('timeout') end,
 
-        %%then we should receive from the remaining one
+        %%then we should receive from the active message
         receive
-            {done, "bar", "another event"} -> ok;
-            Unexpected -> exit('received an unexepcted message ~p', Unexpected)
+            {done, "bar", "another event"} -> ok
         after 1500 -> exit('timeout')
         end,
 
-        %%but not the other
+        %%as should the client, which we'll kill; it should be removed
+        %%(there's a printf in evserv...)
+        receive
+            {clientReceived, {done, "bar", "another event"}} ->
+                io:format("killing ~p~n", [Client]), %%%
+                exit(Client, kill);
+            Unexpected -> exit(io_lib:format('received an unexepcted message ~p',
+                                             [Unexpected]))
+        after 1500 -> exit('timeout')
+        end,
+
+        %%and nothing receives the cancelled message.
         receive Unexpected2 ->
-                exit('received an unexpected message ~p', [Unexpected2])
+                exit(io_lib:format('received an unexpected message ~p',
+                                   [Unexpected2]))
         after 1500 -> ok
         end
 
     after
         Pid ! shutdown,
+        exit(Client, kill),
         flush()
     end,
     ok.
+
+simpleClient(Loopback) ->
+    receive
+        Message ->
+            Loopback ! {clientReceived, Message},
+            simpleClient(Loopback)
+    end.
+
+
 
 flush() ->
     receive
