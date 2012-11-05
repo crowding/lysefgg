@@ -122,8 +122,6 @@ test() ->
                 exit('received an unexpected message ~p', [Unexpected2])
         after 1500 -> ok
         end
-    %we should receive a notification from the other
-    %%after canceling, we should not receive a notification....
 
     after
         Pid ! shutdown,
