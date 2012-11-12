@@ -1,13 +1,13 @@
 %%%%% Naive version
 -module(kitty_server).
 
--export([start_link/0, order_cat/4, return_cat/2, close_shop/1,
-         handle_cast/2, handle_call/4]).
+-export([start_link/0, order_cat/4, return_cat/2, close_shop/1]).
+-export([init/1, handle_call/3, handle_cast/2]).
 
 -include("include/cat.hrl").
 
 %%% Client API
-start_link() -> spawn_link(fun init/0).
+start_link() -> my_server:start_link(?MODULE, []).
 
 %% Synchronous call
 order_cat(Pid, Name, Color, Description) ->
@@ -22,7 +22,7 @@ close_shop(Pid) ->
     my_server:call(Pid, terminate).
 
 %%% Server functions
-init() -> my_server:loop(?MODULE, []).
+init([]) -> []. %%no treatment of info here.
 
 handle_cast({return, Cat=#cat{}}, Cats) ->
     [Cat | Cats];
@@ -32,23 +32,22 @@ handle_cast(Unknown, Cats) ->
     io:format("Unknown st: ~p~n", [Unknown]),
     Cats.
 
-handle_call({order, Name, Color, Description}, Pid, Ref, Cats) ->
+handle_call({order, Name, Color, Description}, From, Cats) ->
     if Cats =:= [] ->
-            Pid ! {Ref, make_cat(Name, Color, Description)},
+            my_server:reply(From, make_cat(Name, Color, Description)),
             Cats;
        Cats =/= [] -> % got to empty the stock
-            Pid ! {Ref, hd(Cats)},
+            my_server:reply(From, hd(Cats)),
             tl(Cats)
     end;
 
-handle_call(terminate, Pid, Ref, Cats) ->
-    Pid ! {Ref, ok},
-    terminate(Cats),
-    terminated;
+handle_call(terminate, From, Cats) ->
+    my_server:reply(From, ok),
+    terminate(Cats);
 
-handle_call(Unknown, Pid, Ref, Cats) ->
+handle_call(Unknown, From, Cats) ->
     %% do some logging here too
-    io:format("Unknown call: ~p~n", [{Unknown, Pid, Ref}]),
+    io:format("Unknown call: ~p~n", [{Unknown, From}]),
     Cats.
 
 %%% Private functions
@@ -57,4 +56,4 @@ make_cat(Name, Col, Desc) ->
 
 terminate(Cats) ->
     [io:format("~p was set free.~n",[C#cat.name]) || C <- Cats],
-    ok.
+    exit(normal).
