@@ -3,7 +3,7 @@
 
 call(Pid, Msg) ->
     Ref = erlang:monitor(process, Pid),
-    Pid ! {self(), Ref, Msg},
+    Pid ! {sync, self(), Ref, Msg},
     receive
         {Ref, Reply} ->
             erlang:demonitor(Ref, [flush]),
@@ -13,3 +13,8 @@ call(Pid, Msg) ->
     after 5000 ->
             erlang:error(timeout)
     end.
+
+cast(Pid, Msg) ->
+    Pid ! {async, Msg},
+    ok.
+

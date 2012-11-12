@@ -14,8 +14,7 @@ order_cat(Pid, Name, Color, Description) ->
 
 %% This call is asynchronous
 return_cat(Pid, Cat = #cat{}) ->
-    Pid ! {return, Cat},
-    ok.
+    my_server:cast(Pid, {return, Cat}).
 
 %% Synchronous call
 close_shop(Pid) ->
@@ -26,7 +25,7 @@ init() -> loop([]).
 
 loop(Cats) ->
     receive
-        {Pid, Ref, {order, Name, Color, Description}} ->
+        {sync, Pid, Ref, {order, Name, Color, Description}} ->
             if Cats =:= [] ->
                     Pid ! {Ref, make_cat(Name, Color, Description)},
                     loop(Cats);
@@ -34,9 +33,9 @@ loop(Cats) ->
                     Pid ! {Ref, hd(Cats)},
                     loop(tl(Cats))
             end;
-        {return, Cat = #cat{}} ->
+        {async, {return, Cat = #cat{}}} ->
             loop([Cat|Cats]);
-        {Pid, Ref, terminate} ->
+        {sync, Pid, Ref, terminate} ->
             Pid ! {Ref, ok},
             terminate(Cats);
         Unknown ->
