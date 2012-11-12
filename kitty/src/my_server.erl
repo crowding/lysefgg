@@ -18,3 +18,12 @@ cast(Pid, Msg) ->
     Pid ! {async, Msg},
     ok.
 
+loop(_, terminated) ->
+    ok;
+loop(Module, State) ->
+    receive
+        {async, Msg} ->
+            loop(Module, Module:handle_cast(Msg, State));
+        {sync, Pid, Ref, Msg} ->
+            loop(Module, Module:handle_call(Msg, Pid, Ref, State))
+    end.
