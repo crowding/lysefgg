@@ -1,6 +1,6 @@
 -module(exceptions).
 -compile(export_all).
- 
+
 throws(F) ->
     try F() of
         _ -> ok
@@ -9,7 +9,7 @@ throws(F) ->
     end.
 
 errors(F) ->
-    try F() of 
+    try F() of
         _ -> pl
     catch
         error:Error -> {error, caught, Error}
@@ -55,5 +55,5 @@ whoa() ->
 catcher(X, Y) ->
         case catch X/Y of
             {'EXIT', {badarith, _}} -> "uh oh";
-            N -> N;
+            N -> N
         end.
