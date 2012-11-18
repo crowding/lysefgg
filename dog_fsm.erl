@@ -54,8 +54,6 @@ test() ->
     pet(Dog),
     pet(Dog),
     exit(Dog, stop).
-
-    
     
     
     
