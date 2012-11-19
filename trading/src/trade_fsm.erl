@@ -29,10 +29,11 @@ accept_trade(OwnPid) ->
 
 %% send an item on the table to be traded
 make_offer(OwnPid, Item) ->
-    gen_fem:send_event(OwnPid, {make_offer, Item}).
+    gen_fsm:send_event(OwnPid, {make_offer, Item}).
 
 %% Cancel trade offer
 retract_offer(OwnPid, Item) ->
+    io:format("~p retract_offer ~p~n", [OwnPid, Item]),
     gen_fsm:send_event(OwnPid, {retract_offer, Item}).
 
 %% Mention that you're ready for a trade. When the other player also
@@ -58,7 +59,7 @@ do_offer(OtherPid, Item) ->
 
 %%forward a client's offer cancellation
 undo_offer(OtherPid, Item) ->
-    gen_fsm:send_event({undo_offer, Item}).
+    gen_fsm:send_event(OtherPid, {undo_offer, Item}).
 
 %%ask the other side if they're ready to trade.
 are_you_ready(OtherPid) ->
@@ -139,7 +140,7 @@ idle_wait({ask_negotiate, OtherPid}, S=#state{other=OtherPid}) ->
 idle_wait({accept_negotiate, OtherPid}, S=#state{other=OtherPid}) ->
     gen_fsm:reply(S#state.from, ok),
     notice(S, "starting negotiation", []),
-    {next_statea, negotiate, S};
+    {next_state, negotiate, S};
 idle_wait(Event, Data) ->
     unexpected(Event, idle_wait),
     {next_state, idle_wait, Data}.
@@ -167,15 +168,15 @@ negotiate({make_offer, Item}, S=#state{ownitems=OwnItems}) ->
     {next_state, negotiate, S#state{ownitems=add(Item, OwnItems)}};
 %%own side retracts offer of an item
 negotiate({retract_offer, Item}, S=#state{ownitems=OwnItems}) ->
-    do_offer(S#state.other, Item),
+    undo_offer(S#state.other, Item),
     notice(S, "offering ~p", [Item]),
     {next_state, negotiate, S#state{ownitems=remove(Item, OwnItems)}};
 %%other side offers an otem
 negotiate({do_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player offering ~p", [Item]),
-    {next_state, negotiate, S=#state{otheritems=remove(Item, OtherItems)}};
+    {next_state, negotiate, S#state{otheritems=remove(Item, OtherItems)}};
 %%other side retracts an item offer
-negotiate({do_offer, Item}, S=#state{otheritems=OtherItems}) ->
+negotiate({undo_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player cancelling offer on ~p", [Item]),
     {next_state, negotiate, S#state{otheritems=remove(Item, OtherItems)}};
 %%other side is ready to trade
@@ -279,6 +280,12 @@ handle_sync_event(Event, _From, StateName, Data) ->
     unexpected(Event, StateName),
     {next_state, StateName, Data}.
 
+handle_info({'DOWN', Ref, process, Pid, Reason}, _, S=#state{other=Pid, monitor=Ref}) ->
+    notice(S, "Other side dead", []),
+    {stop, {other_down, Reason}, S};
+handle_info(Info, StateName, Data) ->
+    unexpected(Info, StateName),
+    {next_state, StateName, Data}.
 
 code_change(_OldVsn, StateName, Data, _Extra) ->
     {ok, StateName, Data}.
