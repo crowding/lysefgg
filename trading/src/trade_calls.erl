@@ -51,6 +51,45 @@ jim(PidA, PidCliA) ->
     timer:sleep(200),
     timer:sleep(1000).
 
+%% force a race condition on cd trade negotiation
+main_cd() ->
+    S = self(),
+    PidCliC = spawn(fun() -> marc(S) end),
+    receive PidC -> PidC end,
+    spawn(fun() -> pete(S, PidC, PidCliC) end),
+    receive PidD -> PidD end,
+    PidCliC ! PidD.
+
+marc(Parent) ->
+    {ok, Pid} = trade_fsm:start_link("Marc"),
+    Parent ! Pid,
+    receive PidD -> PidD end,
+    io:format("Spawned Marc: ~p~n", [PidD]),
+    sys:trace(Pid, true),
+    sync2(),
+    trade_fsm:trade(Pid, PidD),
+    %%no need to accept_trade thanks to the race condition???
+    timer:sleep(600),
+    trade_fsm:retract_offer(Pid, "car"),
+    trade_fsm:make_offer(Pid, "horse"),
+    timer:sleep(600),
+    trade_fsm:cancel(Pid),
+    timer:sleep(1000),
+    ok.
+
+pete(Parent, PidC, PidCliC) ->
+    {ok, Pid} = trade_fsm:start_link("Pete"),
+    Parent ! Pid,
+    io:format("Spawned Pete: ~p~n", [Pid]),
+    sys:trace(Pid, true),
+    sync1(PidCliC),
+    trade_fsm:trade(Pid, PidC),
+    trade_fsm:retract_offer(Pid, "car"),
+    trade_fsm:make_offer(Pid, "manatee"),
+    timer:sleep(100),
+    trade_fsm:ready(Pid),
+    timer:sleep(1000).
+
 sync1(Pid) ->
     Pid ! self(),
     receive ack -> ok end.

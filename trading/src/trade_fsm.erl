@@ -33,7 +33,6 @@ make_offer(OwnPid, Item) ->
 
 %% Cancel trade offer
 retract_offer(OwnPid, Item) ->
-    io:format("~p retract_offer ~p~n", [OwnPid, Item]),
     gen_fsm:send_event(OwnPid, {retract_offer, Item}).
 
 %% Mention that you're ready for a trade. When the other player also
@@ -83,12 +82,12 @@ ack_trans(OtherPid) ->
 ask_commit(OtherPid) ->
     gen_fsm:sync_send_event(OtherPid, ask_commit).
 
-%% begin the syunchronous commit
+%% begin the synchronous commit
 do_commit(OtherPid) ->
     gen_fsm:sync_send_event(OtherPid, do_commit).
 
 notify_cancel(OtherPid) ->
-    gen_fsm:sync_send_event(OtherPid, cancel).
+    gen_fsm:send_all_state_event(OtherPid, cancel).
 
 
 %% God, what lot of one line wrapper functions. Was that really necessary?
@@ -106,7 +105,7 @@ init(Name) ->
 %% Send players a notice. This could be the messages to their clients
 %% but for our purposes, outputting to the shell is enough.
 notice(#state{name=N}, Str, Args) ->
-    io:format("~s: "++Str++"~n", [N|Args]).
+    io:format("~s ~p: "++Str++"~n", [N, self()|Args]).
 
 unexpected(Msg, State) ->
     io:format("~p received unknown event ~p while in state ~p~n",
@@ -121,11 +120,10 @@ idle(Event, Data) ->
     unexpected(Event, idle),
     {next_state, idle, Data}.
 
-
-%% asynchronoous call to idle state.
+%% asynchronous call to idle state.
 idle({negotiate, OtherPid}, From, S=#state{}) ->
-    ask_negotiate(OtherPid, self()),
     notice(S, "asking user ~p for a trade", [OtherPid]),
+    ask_negotiate(OtherPid, self()),
     Ref =  monitor(process, OtherPid),
     {next_state, idle_wait, S#state{other=OtherPid, monitor=Ref, from=From}};
 idle(Event, _From, Data) ->
@@ -134,6 +132,8 @@ idle(Event, _From, Data) ->
 
 %% waiting to confirm state of transaction
 idle_wait({ask_negotiate, OtherPid}, S=#state{other=OtherPid}) ->
+    notice(S, "user ~p asked ~p for a trade while in idle_wait state",
+           [OtherPid, self()]),
     gen_fsm:reply(S#state.from, ok),
     notice(S, "starting negotiation", []),
     {next_state, negotiate, S};
@@ -169,12 +169,13 @@ negotiate({make_offer, Item}, S=#state{ownitems=OwnItems}) ->
 %%own side retracts offer of an item
 negotiate({retract_offer, Item}, S=#state{ownitems=OwnItems}) ->
     undo_offer(S#state.other, Item),
-    notice(S, "offering ~p", [Item]),
+    notice(S, "cancelling offer on ~p", [Item]),
     {next_state, negotiate, S#state{ownitems=remove(Item, OwnItems)}};
 %%other side offers an otem
 negotiate({do_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player offering ~p", [Item]),
     {next_state, negotiate, S#state{otheritems=remove(Item, OtherItems)}};
+ 
 %%other side retracts an item offer
 negotiate({undo_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player cancelling offer on ~p", [Item]),
@@ -182,7 +183,7 @@ negotiate({undo_offer, Item}, S=#state{otheritems=OtherItems}) ->
 %%other side is ready to trade
 negotiate(are_you_ready, S=#state{other=OtherPid}) ->
     io:format("Other player ready to transfer goods:~n"
-              "You get ~p. the other side gets ~p",
+              "You get ~p. the other side gets ~p~n",
               [S#state.otheritems, S#state.ownitems]),
     not_yet(OtherPid),
     {next_state, negotiate, S};
@@ -191,14 +192,13 @@ negotiate(Event, Data) ->
     {next_state, negotiate, Data}.
 
 %synchronous negotiate functions
-negotiate(are_you_ready, From, S = #state{other=OtherPid}) ->
-    are_you_ready(OtherPid),
+negotiate(ready, From, S = #state{other=OtherPid}) ->
     notice(S, "asking if ready, waiting", []),
+    are_you_ready(OtherPid),
     {next_state, wait, S#state{from=From}};
 negotiate(Event, _From, S) ->
     unexpected(Event, negotiate),
     {next_state, negotiate, S}.
-
 
 %%now for the wait state.
 wait({do_offer, Item}, S=#state{otheritems=OtherItems}) ->
@@ -265,7 +265,7 @@ commit(S = #state{}) ->
 
 %%what to do if the other player has sent a cancel event.
 handle_event(cancel, _StateName, S=#state{}) ->
-    notice(S,"received cancel event", {}),
+    notice(S,"received cancel event", []),
     {stop, other_cancelled, S};
 handle_event(Event, StateName, Data) ->
     unexpected(Event, StateName),
@@ -273,9 +273,9 @@ handle_event(Event, StateName, Data) ->
 
 %%what to do when we want to cancel.
 handle_sync_event(cancel, _From, _StateName, S = #state{}) ->
+    notice(S, "cancelling trade, sending cancel event", []),
     notify_cancel(S#state.other),
-    notice(S, "calcelling trace, sending cancel event", []),
-    {stop, cancekked, ok, S};
+    {stop, cancelled, ok, S};
 handle_sync_event(Event, _From, StateName, Data) ->
     unexpected(Event, StateName),
     {next_state, StateName, Data}.
