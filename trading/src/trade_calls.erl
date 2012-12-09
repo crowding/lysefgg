@@ -90,6 +90,54 @@ pete(Parent, PidC, PidCliC) ->
     trade_fsm:ready(Pid),
     timer:sleep(1000).
 
+main_ef() ->
+    S = self(),
+    PidCliE = spawn(fun() -> carl(S) end),
+    receive PidE -> PidE end,
+    spawn(fun() -> jim(PidE, PidCliE) end).
+
+carlClient(Parent) ->
+    {ok, Carl} = trade_fsm:start_link("Carl"),
+    Parent ! Carl,
+    io:format("Spawned Carl: ~p~n", [Carl]),
+    sys:trace(Carl, true),
+    timer:sleep(800),
+    trade_fsm:accept_trade(Carl),
+    timer:sleep(400),
+    io:format("~p~n", [trade_fsm:ready(Carl)]),
+    timer:sleep(1000),
+    trade_fsm:make_offer(Carl, "horse"), %note that it's make offer to
+                                         %your trader, not the other
+                                         %guy's trader.
+    trade_fsm:make_offer(Carl, "sword"),
+    timer:sleep(1000),
+    to:format("carl synchronizing~n"),
+    sync2(),
+    trade_fsm:ready(Carl),
+    timer:sleep(200),
+    trade_fsm:ready(Carl),
+    timer:sleep(1000).
+
+%was vary confused why this needed both the other trader pid and its
+%cient pid. Turns out it's just for testing, so that we can use the
+%sync() function defined below.
+jimClient(Carl, CarlClient) ->
+    {ok, Jim} = trade_fsm:start_link("Jim"),
+    io:format("Spawned Jim: ~p~n", [Jim]),
+    sys:trace(Jim, true),
+    timer:sleep(500),
+    trade_fsm:trade(Jim,Carl),
+    trade_fsm:make_offer(Jim, "boots"),
+    timer:sleep(200),
+    trade_fsm:make_offer(Jim, "shotgun"),
+    timer:sleep(1000),
+    io:format("jim synchronizing~n"),
+    sync1(CarlClient),
+    trade_fsm:make_offer(Jim, "horse"),
+    timer:sleep(200),
+    trade_fsm:ready(Jim),
+    timer:sleep(1000).
+
 sync1(Pid) ->
     Pid ! self(),
     receive ack -> ok end.
@@ -98,3 +146,4 @@ sync2() ->
     receive
         From -> From ! ack
     end.
+
