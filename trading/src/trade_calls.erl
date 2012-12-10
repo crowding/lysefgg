@@ -16,7 +16,7 @@ carl(Parent) ->
     {ok, Pid} = trade_fsm:start_link("Carl"),
     Parent ! Pid,
     io:format ("Spawned Carl:~p~n", [Pid]),
-    sys:trace(Pid, true),
+    %sys:trace(Pid, true),
     timer:sleep(800),
     trade_fsm:accept_trade(Pid),                %800
     timer:sleep(400),
@@ -35,7 +35,7 @@ carl(Parent) ->
 jim(PidA, PidCliA) ->
     {ok, Pid} = trade_fsm:start_link("Jim"),
     io:format("Spawned Jim: ~p~n", [Pid]),
-    sys:trace(Pid,true),
+    %sys:trace(Pid,true),
     timer:sleep(500),
     trade_fsm:trade(Pid, PidA),                 %500
     trade_fsm:make_offer(Pid, "boots"),
@@ -65,7 +65,7 @@ marc(Parent) ->
     Parent ! Pid,
     receive PidD -> PidD end,
     io:format("Spawned Marc: ~p~n", [PidD]),
-    sys:trace(Pid, true),
+    %sys:trace(Pid, true),
     sync2(),
     trade_fsm:trade(Pid, PidD),
     %%no need to accept_trade thanks to the race condition???
@@ -81,7 +81,7 @@ pete(Parent, PidC, PidCliC) ->
     {ok, Pid} = trade_fsm:start_link("Pete"),
     Parent ! Pid,
     io:format("Spawned Pete: ~p~n", [Pid]),
-    sys:trace(Pid, true),
+    %sys:trace(Pid, true),
     sync1(PidCliC),
     trade_fsm:trade(Pid, PidC),
     trade_fsm:retract_offer(Pid, "car"),
@@ -100,7 +100,7 @@ carlClient(Parent) ->
     {ok, Carl} = trade_fsm:start_link("Carl"),
     Parent ! Carl,
     io:format("Spawned Carl: ~p~n", [Carl]),
-    sys:trace(Carl, true),
+    %sys:trace(Carl, true),
     timer:sleep(800),
     trade_fsm:accept_trade(Carl),
     timer:sleep(400),
@@ -124,7 +124,7 @@ carlClient(Parent) ->
 jimClient(Carl, CarlClient) ->
     {ok, Jim} = trade_fsm:start_link("Jim"),
     io:format("Spawned Jim: ~p~n", [Jim]),
-    sys:trace(Jim, true),
+    %sys:trace(Jim, true),
     timer:sleep(500),
     trade_fsm:trade(Jim,Carl),
     trade_fsm:make_offer(Jim, "boots"),
@@ -148,4 +148,3 @@ sync2() ->
     receive
         From -> From ! ack
     end.
-

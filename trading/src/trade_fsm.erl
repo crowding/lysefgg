@@ -3,7 +3,8 @@
 
 %%public API
 -export([start/1, start_link/1, trade/2, accept_trade/1,
-         make_offer/2, retract_offer/2, ready/1, cancel/1]).
+         make_offer/2, retract_offer/2, ready/1, cancel/1,
+         explain/1]).
 
 %%gen_fsm callbacks
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3,
@@ -11,6 +12,9 @@
          %custom state names
          idle/2, idle/3, idle_wait/2, idle_wait/3, negotiate/2,
          negotiate/3, wait/2, ready/2, ready/3]).
+
+-define(rec_info(T,R),
+        lists:zip(record_info(fields,T),tl(tuple_to_list(R)))). 
 
 %%%PUBLIC API
 start(Name) ->
@@ -61,7 +65,7 @@ undo_offer(OtherPid, Item) ->
     gen_fsm:send_event(OtherPid, {undo_offer, Item}).
 
 %%ask the other side if they're ready to trade.
-are_you_ready(OtherPid) ->
+are_you_ready(OtherPid) -> 
     gen_fsm:send_event(OtherPid, are_you_ready).
 
 %%reply that the side is not ready to trade
@@ -175,8 +179,7 @@ negotiate({retract_offer, Item}, S=#state{ownitems=OwnItems}) ->
 %%other side offers an otem
 negotiate({do_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player offering ~p", [Item]),
-    {next_state, negotiate, S#state{otheritems=remove(Item, OtherItems)}};
-
+    {next_state, negotiate, S#state{otheritems=add(Item, OtherItems)}};
 %%other side retracts an item offer
 negotiate({undo_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player cancelling offer on ~p", [Item]),
@@ -304,3 +307,14 @@ terminate(normal, ready, S=#state{}) ->
 terminate(_Reason, _StateName, _StateData) ->
     ok.
 
+explain(Pid) ->
+    io:format("Explaining:~n"),
+    {status,Pid,_,[_,_,_,_,[_,_,{data,[{_,State}]}]]} = sys:get_status(Pid),
+    io:format("----- ~p~n", [?rec_info(state, State)]),
+    case State#state.other of
+        undefined -> undefined;
+        OtherPid ->
+            {status,OtherPid,_,[_,_,_,_,[_,_,{data,[{_,OtherState}]}]]} = sys:get_status(OtherPid),
+            io:format("----- ~p~n", [?rec_info(state, OtherState)])
+    end.
+ 
