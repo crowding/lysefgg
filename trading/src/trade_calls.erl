@@ -92,9 +92,9 @@ pete(Parent, PidC, PidCliC) ->
 
 main_ef() ->
     S = self(),
-    PidCliE = spawn(fun() -> carl(S) end),
+    PidCliE = spawn(fun() -> carlClient(S) end),
     receive PidE -> PidE end,
-    spawn(fun() -> jim(PidE, PidCliE) end).
+    spawn(fun() -> jimClient(PidE, PidCliE) end).
 
 carlClient(Parent) ->
     {ok, Carl} = trade_fsm:start_link("Carl"),
@@ -104,14 +104,14 @@ carlClient(Parent) ->
     timer:sleep(800),
     trade_fsm:accept_trade(Carl),
     timer:sleep(400),
-    io:format("~p~n", [trade_fsm:ready(Carl)]),
+    io:format("~p~n", [trade_fsm:ready(Carl)]), %what? this is a synchronous call? never gonna sync.
     timer:sleep(1000),
     trade_fsm:make_offer(Carl, "horse"), %note that it's make offer to
                                          %your trader, not the other
                                          %guy's trader.
     trade_fsm:make_offer(Carl, "sword"),
     timer:sleep(1000),
-    to:format("carl synchronizing~n"),
+    io:format("carl synchronizing~n"),
     sync2(),
     trade_fsm:ready(Carl),
     timer:sleep(200),
@@ -128,6 +128,8 @@ jimClient(Carl, CarlClient) ->
     timer:sleep(500),
     trade_fsm:trade(Jim,Carl),
     trade_fsm:make_offer(Jim, "boots"),
+    timer:sleep(200),
+    trade_fsm:retract_offer(Jim, "boots"),
     timer:sleep(200),
     trade_fsm:make_offer(Jim, "shotgun"),
     timer:sleep(1000),

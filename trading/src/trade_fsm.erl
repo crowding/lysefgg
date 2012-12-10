@@ -67,6 +67,7 @@ are_you_ready(OtherPid) ->
 %%reply that the side is not ready to trade
 %%i.e. is not in 'wait' state
 not_yet(OtherPid) ->
+    io:format("replying with not yet~n"),
     gen_fsm:send_event(OtherPid, not_yet).
 
 %%tells the other fsm that the user is currently waiting for the ready
@@ -175,7 +176,7 @@ negotiate({retract_offer, Item}, S=#state{ownitems=OwnItems}) ->
 negotiate({do_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player offering ~p", [Item]),
     {next_state, negotiate, S#state{otheritems=remove(Item, OtherItems)}};
- 
+
 %%other side retracts an item offer
 negotiate({undo_offer, Item}, S=#state{otheritems=OtherItems}) ->
     notice(S, "other player cancelling offer on ~p", [Item]),
@@ -195,6 +196,7 @@ negotiate(Event, Data) ->
 negotiate(ready, From, S = #state{other=OtherPid}) ->
     notice(S, "asking if ready, waiting", []),
     are_you_ready(OtherPid),
+    notice(S, "asked if ready?", []),
     {next_state, wait, S#state{from=From}};
 negotiate(Event, _From, S) ->
     unexpected(Event, negotiate),
@@ -214,7 +216,7 @@ wait(are_you_ready, S=#state{}) ->
     notice(S, "asked if ready, and I am. Waiting for same reply.", []),
     {next_state, wait, S};
 wait(not_yet, S=#state{}) ->
-    notice(S, "Other not ready yet", []),
+    notice(S, "Other not ready yet", []), %we don't reply here...?
     {next_state, wait, S};
 wait('ready!', S=#state{}) ->
     am_ready(S#state.other),
@@ -234,7 +236,7 @@ ready(ack, S=#state{}) ->
         true ->
             try
                 notice(S, "asking for commit", []),
-                ready_commit_ = ask_commit(S#state.other),
+                ready_commit = ask_commit(S#state.other),
                 notice(S, "ordering commit", []),
                 ok = do_commit(S#state.other),
                 notice(S, "committing...", []),
@@ -252,9 +254,16 @@ ready(Event, Data) ->
     unexpected(Event, ready),
     {next_state, ready, Data}.
 
-ready(do_commit, _From, S) ->
+ready(ask_commit, _From, S) ->
     notice(S, "replying to ask_commit", []),
-    {reply, ready_commit, ready, S}.
+    {reply, ready_commit, ready, S};
+ready(do_commit, _From, S) ->
+    notice(S, "committing...", []),
+    commit(S),
+    {stop, normal, ok, S};
+ready(Event, _From, Data) ->
+    unexpected(Event, ready),
+    {next_state, ready, Data}.
 
 commit(S = #state{}) ->
     io:format("Transaction completed for ~s. "
